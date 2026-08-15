@@ -1,0 +1,9 @@
+CREATE OR REPLACE FUNCTION pljs_fdw_handler() RETURNS fdw_handler
+ AS 'MODULE_PATHNAME' LANGUAGE C STRICT;
+
+CREATE OR REPLACE FUNCTION pljs_fdw_validator(text[], oid) RETURNS void
+ AS 'MODULE_PATHNAME' LANGUAGE C STRICT;
+
+CREATE FOREIGN DATA WRAPPER pljs_fdw
+ HANDLER pljs_fdw_handler
+ VALIDATOR pljs_fdw_validator;

@@ -1,0 +1,12 @@
+*.o
+*.so
+*.dylib
+results
+regression.diffs
+regression.out
+
+.clangd
+.depend
+.deps
+compile_commands.json
+pljs_fdw--*.sql
