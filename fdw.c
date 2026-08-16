@@ -80,10 +80,11 @@ PG_MODULE_MAGIC;
  * This is its own PGXS extension (pljs_fdw, this directory's Makefile/
  * control/SQL script), separate from pljs itself, with `requires = 'pljs'`
  * in pljs_fdw.control: `CREATE EXTENSION pljs_fdw` refuses to run unless
- * `CREATE EXTENSION pljs` already has. pljs_fdw.so links against pljs.so
- * (see SHLIB_LINK in the Makefile here) to call the handful of PLJS
- * functions below -- those are the only symbols pljs.so exports with
- * PGDLLEXPORT (see src/pljs.h) for exactly this purpose.
+ * `CREATE EXTENSION pljs` already has. pljs_fdw.so is NOT linked against
+ * pljs.so at build time; it resolves the handful of PLJS functions it needs
+ * at runtime instead (see "PLJS function binding" below) -- those are the
+ * only symbols pljs.so exports with PGDLLEXPORT (see pljs's src/pljs.h) for
+ * exactly this purpose.
  *
  * A foreign table's implementation is a CommonJS module (loaded via
  * pljs_module_require(), i.e. the same `pljs.modules` table `pljs.require()`
