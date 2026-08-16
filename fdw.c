@@ -68,6 +68,8 @@
 
 typedef struct pljs_type pljs_type;
 
+#include "net.h"
+
 PG_MODULE_MAGIC;
 
 /*
@@ -284,12 +286,17 @@ static void pljs_fdw_bind_pljs_functions(void) {
  * because this context is only ever reachable through BeginForeignScan,
  * which in turn is only reachable via CREATE FOREIGN DATA WRAPPER/SERVER,
  * gated by Postgres's own (superuser-only) FDW privilege model rather than
- * the PL trusted/untrusted mechanism. Currently a no-op placeholder.
+ * the PL trusted/untrusted mechanism. Currently adds `pljsFdwNet` (see
+ * net.c): raw blocking TCP sockets plus sha256/hmacSha256, the minimal
+ * primitives a JS-level network protocol implementation (e.g. a Postgres
+ * wire-protocol client) needs -- deliberately not a specific protocol
+ * binding itself.
  *
  * @param ctx #JSContext Javascript context, already set up via
  *            pljs_setup_namespace().
  */
 static void pljs_fdw_extend_namespace(JSContext *ctx) {
+  pljs_fdw_net_init_namespace(ctx);
 }
 
 /*

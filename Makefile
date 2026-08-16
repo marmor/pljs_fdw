@@ -8,16 +8,19 @@ INCLUDEDIR := ${shell $(PG_CONFIG) --includedir}
 INCLUDEDIR_SERVER := ${shell $(PG_CONFIG) --includedir-server}
 
 CP = cp
-SRCS = fdw.c
-OBJS = fdw.o
+SRCS = fdw.c net.c
+OBJS = fdw.o net.o
 MODULE_big = pljs_fdw
 EXTENSION = pljs_fdw
 DATA = pljs_fdw.control pljs_fdw--$(PLJS_FDW_VERSION).sql
 PG_CFLAGS += -fPIC -Wall -Wextra -Wno-unused-parameter -Wno-declaration-after-statement \
     -Wno-cast-function-type -std=c11 -DPLJS_FDW_VERSION=\"$(PLJS_FDW_VERSION)\"
 # Own copy of QuickJS, same as PLJS itself vendors -- see "PLJS function
-# binding" in fdw.c for why this is not linked against pljs.so.
-SHLIB_LINK = -Ldeps/quickjs -lquickjs
+# binding" in fdw.c for why this is not linked against pljs.so. -lcrypto
+# (OpenSSL, for net.c's sha256/hmacSha256 -- SCRAM-SHA-256 auth needs both)
+# is about as safe a new dependency as a Postgres extension can take on:
+# Postgres itself commonly links libssl/libcrypto for its own SSL support.
+SHLIB_LINK = -Ldeps/quickjs -lquickjs -lcrypto
 
 ifeq ($(DEBUG), 1)
 PG_CFLAGS += -g
@@ -33,7 +36,7 @@ all: deps/quickjs/quickjs.h deps/quickjs/libquickjs.a pljs_fdw--$(PLJS_FDW_VERSI
 
 include $(PGXS)
 
-fdw.o: deps/quickjs/libquickjs.a
+fdw.o net.o: deps/quickjs/libquickjs.a
 
 deps/quickjs/quickjs.h:
 	mkdir -p deps
