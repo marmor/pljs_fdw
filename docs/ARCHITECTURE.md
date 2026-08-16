@@ -9,6 +9,42 @@ PLJS's own global `rt`. It vendors its own copy of QuickJS
 than sharing PLJS's — the two never share any QuickJS state, so there's no
 reason for them to be the same build, only reasonably close versions.
 
+## `pljsFdwNet` and JS-level libraries via `pljs.require()`
+
+`pljsFdwNet` (raw TCP sockets plus `sha256`/`hmacSha256`, added in `net.c`)
+is the one deliberately generic capability in the JS namespace, aimed at any
+FDW module that needs to talk to a networked service — not just the
+Postgres wire-protocol client (`examples/pgwire.js`) it was built for. It's
+blocking, matching this framework's synchronous `execute()` model; no
+async I/O primitive exists here, on purpose (see "Deliberately not
+implemented" below).
+
+Two real, general `pljs.require()`/`pljs_module_require()` quirks turned up
+building `pgwire.js`/`examples/remote_pg_fdw.js` on top of it, worth
+knowing before writing any FDW module with a dependency on a shared
+`pljs.modules` library:
+
+- **It doesn't cache, and evaluates into the shared global scope.**
+  `module`/`exports` are plain global properties set fresh on every call,
+  not a per-file closure the way Node's `require()` works. A second
+  `pljs.require('somelib')` anywhere in the same JSContext — which will
+  happen, e.g. two foreign tables both using the same client library — hits
+  a `class`/`const` redeclaration error if the required module has
+  top-level declarations. Fix: wrap the whole module body in an IIFE that
+  returns what `module.exports` should be, so nothing leaks into global
+  scope across repeated evaluations (see `pgwire.js`'s header comment).
+- **It can't be called while another module's own top-level evaluation is
+  still running.** Calling `pljs.require()` at the top level of a module
+  that is *itself* mid-load (i.e. nested inside another
+  `pljs_module_require()`/`pljs.require()` call already on the stack)
+  breaks silently — not even a catchable JS exception at the call site,
+  just a load that never properly finishes, surfacing far upstream as
+  `fdw.c`'s generic "unable to instantiate FDW class" / "not a constructor"
+  error. Fix: defer the `require()` call to actual runtime — e.g. inside a
+  constructor, called later once the requiring module's own load has fully
+  completed — rather than at that module's top level (see
+  `remote_pg_fdw.js`'s constructor).
+
 ## Resolving PLJS functions at runtime, not build time
 
 `fdw.c` calls six PLJS functions — the Datum↔JSValue marshaling and JS
