@@ -103,6 +103,27 @@ spirit, though with lower stakes — `columns` reflects real pruning (only
 attributes actually needed for the scan), and `columnMap` is purely
 informational (rows are still always keyed by the local column name).
 
+**A porting hazard worth calling out explicitly**: `pljs_fdw`'s qual
+recognizer (`pljs_fdw_extract_pushable_quals`, `fdw.c`) is a purely
+syntactic, always-on pattern match over the query's `WHERE` clause — there
+is no way for a JS module to opt out of receiving a qual it doesn't want to
+handle. This matters because Multicorn's own FDWs are built against a
+*different* default: several of them (`csvfdw`, `xmlfdw`, and likely most
+others that don't explicitly implement pushdown) take a `quals` argument
+and simply never look at it, relying on Multicorn/Postgres to recheck every
+row locally afterward — safe under Multicorn's model, not under this one.
+A direct port of that behavior here doesn't degrade gracefully into "just a
+missed optimization" the way it would upstream: it silently returns every
+row regardless of the query's `WHERE` clause, because `pljs_fdw` skips its
+own recheck for whatever it recognizes and offers, trusting `execute()` to
+have honored it. This was caught by direct testing during the `csv_fdw`
+port (`WHERE id = 3` initially returned every row, unfiltered) — not
+something that would show up from reading the Python source alone. **Any
+module ported from a Multicorn FDW that doesn't itself implement real
+pushdown must still filter by `quals` in `execute()`** (and, if it sorts,
+by `sortkeys` too) purely to preserve correctness under this framework's
+contract, independent of whether the original bothered to.
+
 ## Direct modify vs. per-row writes
 
 UPDATE/DELETE has two independent paths a module can opt into (see
